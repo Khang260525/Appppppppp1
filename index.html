@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sổ Nhật Ký & Tính Lương Theo Giờ (Yên Nhật)</title>
+    
+    <link rel="manifest" href="/Apptinhtienluong/manifest.json">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Thiết lập font Inter cho giao diện */
+        body {
+            font-family: 'Inter', sans-serif;
+            /* Monochrome radial gradient background for a modern feel */
+            background: radial-gradient(circle at top left, #f3f4f6, #ffffff, #f9fafb);
+            min-height: 100vh;
+        }
+        .card-shadow {
+            /* Enhanced, softer shadow for depth */
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
+        }
+        input[type="number"]::-webkit-inner-spin-button,
+        input[type="number"]::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        input[type="number"] {
+            -moz-appearance: textfield;
+        }
+        /* Custom button style for primary gradient action - MONOCHROME */
+        .btn-primary {
+            background-image: linear-gradient(to right, #4b5563 0%, #374151 100%); /* Gray-600 to Gray-700 */
+            transition: all 0.3s ease;
+        }
+        .btn-primary:hover {
+            background-image: linear-gradient(to right, #374151 0%, #1f2937 100%); /* Gray-700 to Gray-800 */
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -2px rgba(0, 0, 0, 0.15);
+        }
+    </style>
+</head>
+<body class="p-4 sm:p-8 min-h-screen flex items-center justify-center">
+    <div id="app" class="w-full max-w-4xl bg-white p-6 sm:p-8 rounded-2xl card-shadow flex flex-col lg:flex-row gap-8">
+        
+        <div class="lg:w-1/2">
+            <h1 class="text-3xl font-extrabold text-gray-900 mb-2">Nhập Công Việc Hàng Ngày</h1>
+            <p class="text-sm text-gray-500 mb-6">Lưu lại giờ làm để tính lương tháng tự động (Lưu trữ trên thiết bị).</p>
+
+            <div id="statusMessage" class="mb-4 text-center p-3 rounded-xl text-sm bg-gray-100 text-gray-800 font-medium hidden">Đang tải dữ liệu...</div>
+
+            <div class="space-y-4">
+                <div class="relative">
+                    <label for="workDate" class="block text-sm font-medium text-gray-700 mb-1">Ngày làm việc</label>
+                    <input type="date" id="workDate" oninput="previewDailySalary()"
+                           class="w-full p-3 border-2 border-gray-300 rounded-xl focus:ring-gray-600 focus:border-gray-600 transition duration-150 text-lg">
+                </div>
+                
+                <div class="grid grid-cols-3 gap-2">
+                    <div class="relative">
+                        <label for="startTime" class="block text-sm font-medium text-gray-700 mb-1">Vào Ca</label>
+                        <input type="time" id="startTime" value="07:00" oninput="previewDailySalary()"
+                               class="w-full p-3 border-2 border-gray-300 rounded-xl focus:ring-gray-600 focus:border-gray-600 transition duration-150 text-lg">
+                    </div>
+
+                    <div class="relative">
+                        <label for="endTime" class="block text-sm font-medium text-gray-700 mb-1">Tan Ca</label>
+                        <input type="time" id="endTime" value="19:00" oninput="previewDailySalary()" onchange="attemptAutoSave()"
+                               class="w-full p-3 border-2 border-gray-300 rounded-xl focus:ring-gray-600 focus:border-gray-600 transition duration-150 text-lg">
+                    </div>
+
+                    <div class="relative">
+                        <label for="breakMinutes" class="block text-sm font-medium text-gray-700 mb-1">Nghỉ (phút)</label>
+                        <input type="number" id="breakMinutes" value="60" min="0" step="15" oninput="previewDailySalary()"
+                               class="w-full p-3 border-2 border-gray-300 rounded-xl focus:ring-gray-600 focus:border-gray-600 transition duration-150 text-lg"
+                               placeholder="Phút">
+                    </div>
+                </div>
+            </div>
+            
+            <div id="dailyPreview" class="mt-4 p-4 bg-gray-50 rounded-xl border border-gray-200">
+                <p class="font-bold text-gray-700">Lương Ngày Tạm Tính:</p>
+                <div class="flex justify-between mt-2">
+                    <span class="text-sm">Giờ làm (thực):</span>
+                    <span id="previewHours" class="font-medium text-gray-800">0 giờ</span>
+                </div>
+                <div class="flex justify-between mt-1">
+                    <span class="text-sm text-amber-600">Giờ Tăng Ca (OT):</span>
+                    <span id="previewOvertime" class="font-bold text-amber-600">0 giờ</span>
+                </div>
+                <div class="flex justify-between mt-1">
+                    <span class="text-sm">Thu nhập ngày:</span>
+                    <span id="previewSalary" class="font-bold text-gray-800 text-lg">¥0</span>
+                </div>
+            </div>
+
+            <button onclick="logWorkDay(false)"
+                    class="w-full mt-4 py-3 text-white font-semibold rounded-xl btn-primary shadow-xl focus:outline-none focus:ring-4 focus:ring-gray-400">
+                Lưu Ngày Công (Thủ Công)
+            </button>
+            <p class="text-xs text-gray-500 mt-2 text-center">Lưu ý: Dữ liệu được lưu trực tiếp trên trình duyệt của bạn (hoàn toàn offline).</p>
+        </div>
+
+        <div class="lg:w-1/2">
+            <div class="mb-4 flex items-center gap-2">
+                <label for="monthFilter" class="text-sm font-medium text-gray-700">Xem lương tháng:</label>
+                <select id="monthFilter" onchange="renderWorkLogTable()"
+                        class="p-2 border-2 border-gray-300 rounded-xl focus:ring-gray-600 focus:border-gray-600 transition duration-150 text-base font-semibold">
+                    </select>
+            </div>
+            <h2 class="text-2xl font-extrabold text-gray-800 mb-4">Tổng Kết Lương Tháng</h2>
+            <div class="p-4 bg-gray-700 rounded-xl mb-6 text-white shadow-lg">
+                <div class="flex justify-between items-center">
+                    <span class="text-lg font-semibold">Tổng Ngày Công Đã Lưu</span>
+                    <span id="totalDays" class="text-2xl font-extrabold">0</span>
+                </div>
+                <div class="flex justify-between items-center mt-2">
+                    <span class="text-lg font-semibold text-amber-400">Tổng Giờ Tăng Ca (OT)</span>
+                    <span id="totalOvertime" class="text-2xl font-extrabold text-amber-400">0 giờ</span>
+                </div>
+                <div class="flex justify-between items-center mt-2 pt-2 border-t border-gray-500">
+                    <span class="text-xl font-bold">TỔNG LƯƠNG THÁNG</span>
+                    <span id="resultMonthly" class="text-3xl font-extrabold">¥0</span>
+                </div>
+            </div>
+            
+            <h2 class="text-xl font-bold text-gray-700 mb-3">Lịch Sử Ngày Công</h2>
+            <div class="max-h-96 overflow-y-auto border border-gray-200 rounded-xl">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-100 sticky top-0">
+                        <tr>
+                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-600 uppercase">Ngày</th>
+                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-600 uppercase">Giờ làm</th>
+                            <th class="px-3 py-2 text-right text-xs font-medium text-gray-600 uppercase">Giờ OT</th>
+                            <th class="px-3 py-2 text-right text-xs font-medium text-gray-600 uppercase">Thu nhập</th>
+                            <th class="px-3 py-2 text-right text-xs font-medium text-gray-600 uppercase">Xóa</th>
+                        </tr>
+                    </thead>
+                    <tbody id="workLogTableBody" class="bg-white divide-y divide-gray-200">
+                        <tr><td colspan="5" class="text-center text-gray-500 py-4">Chưa có ngày công nào được lưu.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <button onclick="clearAllLogs()" id="clearAllButton" class="w-full mt-4 py-2 bg-red-500/10 text-red-600 font-semibold rounded-xl hover:bg-red-500/20 transition duration-200 text-sm hidden">
+                Xóa Tất Cả Ngày Công
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // --- Cấu hình lương ---
+        const WORK_LOG_STORAGE_KEY = 'jpyWorkLogs';
+        const STANDARD_RATE = 1225;
+        const OVERTIME_MULTIPLIER = 1.25;
+        const OVERTIME_RATE = STANDARD_RATE * OVERTIME_MULTIPLIER;
+        const STANDARD_HOURS_PER_DAY = 8;
+        let workLogData = []; 
+        // --- End Cấu hình lương ---
+
+        // Hàm định dạng số sang tiền Yên Nhật
+        function formatJPY(number) {
+            if (number === null || isNaN(number)) return '¥0';
+            return new Intl.NumberFormat('ja-JP', {
+                style: 'currency',
+                currency: 'JPY',
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 0
+            }).format(Math.round(number));
+        }
+        
+        // Hàm định dạng giờ từ thập phân sang "H giờ M phút"
+        function formatHoursMinutes(decimalHours) {
+            decimalHours = parseFloat(decimalHours);
+            if (isNaN(decimalHours) || decimalHours <= 0) {
+                return '0 giờ';
+            }
+
+            // Làm tròn đến phút gần nhất
+            const totalMinutes = Math.round(decimalHours * 60);
+            const hours = Math.floor(totalMinutes / 60);
+            const minutes = totalMinutes % 60;
+
+            let result = '';
+            if (hours > 0) {
+                result += `${hours} giờ`;
+            }
+            if (minutes > 0) {
+                if (result) result += ' ';
+                result += `${minutes} phút`;
+            }
+            
+            return result.trim() || '0 giờ';
+        }
+
+        // Hàm tính toán logic (Không đổi, vẫn tính bằng số thập phân để đảm bảo độ chính xác)
+        function calculateDailySalary(startTimeValue, endTimeValue, breakMinutes) {
+            let dailyHours = 0;
+            let dailySalary = 0;
+            let overtimeHours = 0;
+
+            if (startTimeValue && endTimeValue) {
+                const [startHour, startMinute] = startTimeValue.split(':').map(Number);
+                const [endHour, endMinute] = endTimeValue.split(':').map(Number);
+
+                const startTotalMinutes = startHour * 60 + startMinute;
+                let endTotalMinutes = endHour * 60 + endMinute;
+
+                // Xử lý ca đêm (tan ca ngày hôm sau)
+                if (endTotalMinutes < startTotalMinutes) {
+                    endTotalMinutes += (24 * 60);
+                }
+
+                const totalShiftMinutes = endTotalMinutes - startTotalMinutes;
+                let totalWorkingMinutes = totalShiftMinutes - breakMinutes;
+
+                if (totalWorkingMinutes < 0) {
+                    totalWorkingMinutes = 0;
+                }
+
+                dailyHours = totalWorkingMinutes / 60;
+            }
+
+            if (dailyHours <= 0) {
+                return { dailyHours: 0, dailySalary: 0, overtimeHours: 0 };
+            }
+
+            if (dailyHours <= STANDARD_HOURS_PER_DAY) {
+                dailySalary = dailyHours * STANDARD_RATE;
+                overtimeHours = 0;
+            } else {
+                const standardPay = STANDARD_HOURS_PER_DAY * STANDARD_RATE;
+                overtimeHours = dailyHours - STANDARD_HOURS_PER_DAY;
+                const overtimePay = overtimeHours * OVERTIME_RATE;
+                dailySalary = standardPay + overtimePay;
+            }
+
+            return { dailyHours, dailySalary, overtimeHours }; 
+        }
+
+        // --- Xử lý Dữ liệu LocalStorage ---
+        
+        // 1. Tải dữ liệu từ localStorage
+        function loadWorkLogData() {
+            try {
+                const storedData = localStorage.getItem(WORK_LOG_STORAGE_KEY);
+                workLogData = storedData ? JSON.parse(storedData) : [];
+            } catch (e) {
+                console.error("Lỗi khi tải dữ liệu từ LocalStorage:", e);
+                workLogData = []; // Đặt lại nếu lỗi
+            }
+        }
+
+        // 2. Lưu dữ liệu vào localStorage
+        function saveWorkLogData() {
+            try {
+                localStorage.setItem(WORK_LOG_STORAGE_KEY, JSON.stringify(workLogData));
+            } catch (e) {
+                console.error("Lỗi khi lưu dữ liệu vào LocalStorage:", e);
+                showStatusMessage("Lỗi khi lưu dữ liệu vào thiết bị.", 'error');
+            }
+        }
+        
+        // --- Xử lý Bộ Lọc Tháng ---
+
+        // Lấy tất cả các tháng/năm duy nhất từ log để điền vào bộ lọc
+        function populateMonthFilter() {
+            const filterEl = document.getElementById('monthFilter');
+            filterEl.innerHTML = ''; // Xóa các tùy chọn cũ
+
+            // Lấy tất cả các YYYY-MM duy nhất từ workLogData
+            const months = [...new Set(workLogData.map(log => log.date.substring(0, 7)))];
+
+            // Sắp xếp theo thứ tự giảm dần (mới nhất lên trên)
+            months.sort((a, b) => b.localeCompare(a));
+            
+            // Thêm tùy chọn "Tất Cả" (All Time)
+            const allOption = document.createElement('option');
+            allOption.value = 'all';
+            allOption.textContent = 'Tất Cả (Toàn Bộ Log)';
+            filterEl.appendChild(allOption);
+
+            // Thêm các tháng/năm đã tìm thấy
+            months.forEach(monthKey => {
+                const option = document.createElement('option');
+                option.value = monthKey;
+                // Chuyển đổi YYYY-MM sang định dạng hiển thị: MM/YYYY (Ví dụ: 10/2025)
+                const [year, month] = monthKey.split('-');
+                option.textContent = `${month}/${year}`;
+                filterEl.appendChild(option);
+            });
+
+            // Chọn tháng hiện tại làm mặc định nếu có (YYYY-MM)
+            const currentMonth = new Date().toISOString().substring(0, 7);
+            if (months.includes(currentMonth)) {
+                filterEl.value = currentMonth;
+            } else {
+                // Nếu không, chọn tùy chọn đầu tiên (tháng mới nhất hoặc "Tất Cả")
+                // Kiểm tra xem filterEl có options không trước khi gán value
+                if (filterEl.options.length > 0) {
+                    filterEl.value = filterEl.options[0].value;
+                }
+            }
+        }
+
+        // Lấy dữ liệu log đã được lọc
+        function getFilteredLogs() {
+            const monthFilterEl = document.getElementById('monthFilter');
+            if (!monthFilterEl) return workLogData; // Tránh lỗi nếu chưa load xong
+            const monthFilter = monthFilterEl.value;
+            
+            if (monthFilter === 'all') {
+                return workLogData; // Trả về tất cả nếu chọn "Tất Cả"
+            }
+
+            return workLogData.filter(log => log.date.startsWith(monthFilter));
+        }
+
+        // --- Hàm tiện ích UI ---
+
+        // Hiển thị thông báo trạng thái
+        function showStatusMessage(message, type = 'success') {
+            const el = document.getElementById('statusMessage');
+            el.textContent = message;
+            // Loại bỏ tất cả các class màu cũ (emerald, red) và màu xám tạm thời
+            el.classList.remove('hidden', 'bg-red-100', 'text-red-700', 'bg-gray-100', 'text-gray-800');
+            
+            if (type === 'error') {
+                 // Giữ màu đỏ cho lỗi để dễ nhận biết
+                 el.classList.add('bg-red-100', 'text-red-700'); 
+            } else {
+                 // Màu xám đen cho thông báo thành công
+                 el.classList.add('bg-gray-100', 'text-gray-800'); 
+            }
+            
+            el.classList.remove('hidden');
+
+            setTimeout(() => {
+                el.classList.add('hidden');
+            }, 3000);
+        }
+
+        // Hàm hiển thị chi tiết OT và Tổng kết (ĐÃ CẬP NHẬT để dùng dữ liệu lọc)
+        function renderSummary(logsToSummarize = getFilteredLogs()) { 
+            let totalSalary = 0;
+            let totalDays = logsToSummarize.length; // Số ngày công của tháng đã chọn
+            let totalOvertime = 0;
+            
+            logsToSummarize.forEach(log => {
+                totalSalary += parseFloat(log.dailySalary);
+                totalOvertime += parseFloat(log.overtimeHours || 0);
+            });
+            
+            document.getElementById('resultMonthly').textContent = formatJPY(totalSalary);
+            document.getElementById('totalDays').textContent = totalDays;
+            document.getElementById('totalOvertime').textContent = formatHoursMinutes(totalOvertime); 
+
+            // Kiểm tra nút xóa toàn bộ dựa trên DỮ LIỆU GỐC
+            if (workLogData.length > 0) { 
+                document.getElementById('clearAllButton').classList.remove('hidden');
+            } else {
+                document.getElementById('clearAllButton').classList.add('hidden');
+            }
+        }
+        
+        // Hàm hiển thị bảng log (ĐÃ CẬP NHẬT để dùng dữ liệu lọc)
+        function renderWorkLogTable() {
+            const tbody = document.getElementById('workLogTableBody');
+            tbody.innerHTML = '';
+            
+            // SỬ DỤNG DỮ LIỆU ĐÃ LỌC
+            const filteredLogs = getFilteredLogs(); 
+            
+            if (filteredLogs.length === 0) {
+                 tbody.innerHTML = '<tr><td colspan="5" class="text-center text-gray-500 py-4">Chưa có ngày công nào được lưu cho tháng đã chọn.</td></tr>';
+            } else {
+                 // Sắp xếp theo ngày (mới nhất lên trên)
+                filteredLogs.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+                filteredLogs.forEach(log => {
+                    const dailyHoursDisplay = formatHoursMinutes(log.dailyHours);
+                    const overtimeDisplay = formatHoursMinutes(log.overtimeHours);
+                    
+                    const tr = document.createElement('tr');
+                    tr.classList.add('hover:bg-gray-50');
+                    
+                    tr.innerHTML = `
+                        <td class="px-3 py-2 whitespace-nowrap text-sm font-medium text-gray-900">${log.date}</td>
+                        <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-600">${dailyHoursDisplay}</td>
+                        <td class="px-3 py-2 whitespace-nowrap text-sm text-amber-600 font-medium text-right">${overtimeDisplay}</td> <td class="px-3 py-2 whitespace-nowrap text-sm font-semibold text-right">${formatJPY(parseFloat(log.dailySalary))}</td>
+                        <td class="px-3 py-2 whitespace-nowrap text-right">
+                            <button onclick="deleteLog('${log.id}')" class="text-red-600 hover:text-red-800 transition duration-150">
+                                Xóa
+                            </button>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            }
+            
+            renderSummary(filteredLogs);
+        }
+
+        // Tải và hiển thị dữ liệu
+        function loadAndRenderData() {
+            loadWorkLogData();
+            populateMonthFilter(); // GỌI HÀM NÀY ĐỂ ĐIỀN BỘ LỌC
+            renderWorkLogTable();
+            showStatusMessage("Đã tải dữ liệu từ thiết bị.", 'success');
+        }
+
+        // --- Xem trước và Lưu Log ---
+        
+        // Xem trước lương ngày khi nhập input
+        window.previewDailySalary = function() {
+            const startTimeValue = document.getElementById('startTime').value;
+            const endTimeValue = document.getElementById('endTime').value;
+            const breakMinutes = parseInt(document.getElementById('breakMinutes').value) || 0;
+            
+            const { dailyHours, dailySalary, overtimeHours } = calculateDailySalary(startTimeValue, endTimeValue, breakMinutes);
+            
+            document.getElementById('previewHours').textContent = formatHoursMinutes(dailyHours);
+            document.getElementById('previewSalary').textContent = formatJPY(dailySalary);
+            document.getElementById('previewOvertime').textContent = formatHoursMinutes(overtimeHours);
+        }
+        
+        // Tự động lưu khi Giờ Tan Ca thay đổi (Sau khi đã có đủ thông tin)
+        window.attemptAutoSave = function() {
+            const dateValue = document.getElementById('workDate').value;
+            const startTimeValue = document.getElementById('startTime').value;
+            const endTimeValue = document.getElementById('endTime').value;
+            const breakMinutes = parseInt(document.getElementById('breakMinutes').value);
+
+            // Chỉ tự động lưu nếu tất cả các trường quan trọng đã được điền và Giờ Tan Ca có giá trị
+            if (dateValue && startTimeValue && endTimeValue && !isNaN(breakMinutes)) {
+                // Gọi hàm lưu với cờ isAutoSave = true
+                logWorkDay(true); 
+            }
+        }
+
+        // Hàm lưu log vào localStorage (Đã cập nhật để xử lý cả THÊM MỚI và CẬP NHẬT)
+        window.logWorkDay = function(isAutoSave = false) {
+            const dateValue = document.getElementById('workDate').value;
+            const startTimeValue = document.getElementById('startTime').value;
+            const endTimeValue = document.getElementById('endTime').value;
+            const breakMinutes = parseInt(document.getElementById('breakMinutes').value) || 0;
+
+            if (!dateValue || !startTimeValue || !endTimeValue) {
+                if (!isAutoSave) { // Chỉ hiển thị lỗi nếu là click thủ công
+                    showStatusMessage("Vui lòng nhập đủ Ngày, Giờ Vào Ca và Giờ Tan Ca.", 'error');
+                }
+                return;
+            }
+
+            const { dailyHours, dailySalary, overtimeHours } = calculateDailySalary(startTimeValue, endTimeValue, breakMinutes);
+
+            if (dailyHours <= 0) {
+                 if (!isAutoSave) { // Chỉ hiển thị lỗi nếu là click thủ công
+                    showStatusMessage("Giờ làm việc thực tế phải lớn hơn 0.", 'error');
+                }
+                return;
+            }
+
+            // 1. Kiểm tra xem ngày này đã được lưu chưa
+            let existingLogIndex = workLogData.findIndex(log => log.date === dateValue);
+            
+            let statusMsg;
+
+            // 2. Tạo hoặc Cập nhật entry
+            const newLogData = {
+                date: dateValue,
+                startTime: startTimeValue,
+                endTime: endTimeValue,
+                breakMinutes: breakMinutes,
+                dailyHours: dailyHours.toFixed(2), 
+                dailySalary: dailySalary.toFixed(2), 
+                overtimeHours: overtimeHours.toFixed(2), 
+                timestamp: Date.now()
+            };
+
+            if (existingLogIndex > -1) {
+                // CẬP NHẬT
+                statusMsg = `Đã cập nhật ngày công ${dateValue} thành công!`;
+                workLogData[existingLogIndex] = { ...workLogData[existingLogIndex], ...newLogData };
+
+            } else {
+                // THÊM MỚI
+                statusMsg = `Đã lưu ngày công ${dateValue} thành công!`;
+                const logEntry = { id: Date.now().toString(), ...newLogData };
+                workLogData.push(logEntry);
+            }
+            
+            // 3. Lưu và hiển thị lại
+            saveWorkLogData();
+            // Cần cập nhật bộ lọc vì có thể đã thêm log của tháng mới
+            populateMonthFilter(); 
+            renderWorkLogTable();
+            
+            // Chỉ hiển thị thông báo và reset ngày nếu là click thủ công
+            if (!isAutoSave) {
+                showStatusMessage(statusMsg);
+                // Reset ngày làm việc sau khi lưu thủ công
+                document.getElementById('workDate').valueAsDate = new Date();
+            }
+        }
+        
+        // --- Xóa Log ---
+        window.deleteLog = function(docId) {
+             // Lọc bỏ entry cần xóa
+             const initialLength = workLogData.length;
+             workLogData = workLogData.filter(log => log.id !== docId);
+
+             if (workLogData.length < initialLength) {
+                saveWorkLogData();
+                populateMonthFilter(); // Cập nhật bộ lọc sau khi xóa
+                renderWorkLogTable();
+                showStatusMessage("Đã xóa ngày công thành công!");
+             } else {
+                showStatusMessage("Không tìm thấy ngày công để xóa.", 'error');
+             }
+        }
+
+        // Xóa tất cả log
+        window.clearAllLogs = function() {
+            if (workLogData.length === 0) {
+                showStatusMessage("Không có ngày công để xóa.", 'error');
+                return;
+            }
+
+            // Đây là chức năng Xóa Tất Cả, nên sẽ thực hiện xóa ngay
+            workLogData = [];
+            localStorage.removeItem(WORK_LOG_STORAGE_KEY); // Xóa khỏi localStorage
+            populateMonthFilter(); // Xóa hết options
+            renderWorkLogTable();
+            showStatusMessage("Đã xóa **TẤT CẢ** ngày công khỏi thiết bị.", 'error');
+        }
+
+        // --- Setup khi tải trang ---
+        window.onload = function () {
+            // Thiết lập ngày mặc định là ngày hiện tại
+            document.getElementById('workDate').valueAsDate = new Date();
+            loadAndRenderData(); // Tải và hiển thị dữ liệu từ localStorage
+            previewDailySalary(); // Tạm tính lương ngày đầu tiên
+            
+            // PWA: Đăng ký Service Worker
+            if ('serviceWorker' in navigator) {
+                window.addEventListener('load', () => {
+                    // ĐÃ SỬA ĐƯỜNG DẪN TUYỆT ĐỐI CHO GITHUB PAGES
+                    navigator.serviceWorker.register('/Apptinhtienluong/service-worker.js')
+                        .then(reg => console.log('Service Worker đã được đăng ký thành công:', reg.scope))
+                        .catch(err => console.log('Đăng ký Service Worker thất bại:', err));
+                });
+            }
+        };
+    </script>
+</body>
+</html>

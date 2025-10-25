@@ -1,0 +1,17 @@
+{
+  "name": "Sổ Nhật Ký Lương Giờ JPY",
+  "short_name": "Lương JPY",
+  "description": "Theo dõi và tính toán lương theo giờ làm việc tại Nhật Bản.",
+  "start_url": "/App2025/", 
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f9fafb",
+  "theme_color": "#4b5563",
+  "icons": [
+    {
+      "src": "icon-512.png", 
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
