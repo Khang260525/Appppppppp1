@@ -11,6 +11,7 @@
             --card-bg: #ffffff;
             --text-color: #1f2937;
             --border-radius: 12px;
+            --success-color: #10b981; /* Màu xanh thành công */
         }
 
         body {
@@ -93,11 +94,11 @@
             font-size: 1rem;
             font-weight: bold;
             cursor: pointer;
-            transition: background 0.2s;
+            transition: all 0.2s ease; /* Hiệu ứng mượt */
             margin-top: 10px;
         }
 
-        button:hover { background-color: #1d4ed8; }
+        button:active { transform: scale(0.98); } /* Nhấn vào nút hơi lún xuống */
         
         .btn-delete {
             background-color: #ef4444;
@@ -105,6 +106,7 @@
             font-size: 0.9rem;
             margin-top: 20px;
         }
+        .btn-delete:hover { background-color: #dc2626; }
 
         /* Bảng lịch sử */
         .history-controls {
@@ -156,23 +158,23 @@
     <div class="card">
         <div class="input-group">
             <label>Ngày làm việc</label>
-            <input type="date" id="workDate">
+            <input type="date" id="workDate" onchange="saveOrUpdateEntry()">
         </div>
 
         <div style="display: flex; gap: 10px;">
             <div class="input-group" style="flex:1">
                 <label>Vào Ca</label>
-                <input type="time" id="startTime" onchange="calculatePreview()">
+                <input type="time" id="startTime" onchange="saveOrUpdateEntry()">
             </div>
             <div class="input-group" style="flex:1">
                 <label>Tan Ca</label>
-                <input type="time" id="endTime" onchange="calculatePreview()">
+                <input type="time" id="endTime" onchange="saveOrUpdateEntry()">
             </div>
         </div>
 
         <div class="input-group">
             <label>Thời gian nghỉ (phút)</label>
-            <input type="number" id="breakTime" value="60" oninput="calculatePreview()">
+            <input type="number" id="breakTime" value="60" oninput="saveOrUpdateEntry()">
             <small style="color: #6b7280;">Trừ lương thời gian này (Mặc định 60p)</small>
         </div>
 
@@ -191,7 +193,7 @@
             </div>
         </div>
 
-        <button onclick="saveWorkDay()">+ Lưu Ngày Công</button>
+        <button id="btnSave" onclick="showSaveFeedback()">+ Lưu Ngày Công</button>
     </div>
 
     <div class="card">
@@ -201,307 +203,4 @@
             <label>Chọn tháng nhận lương:</label>
             <div style="display:flex; gap:10px; align-items:center;">
                 <select id="monthSelector" onchange="renderHistory()" style="font-weight:bold; color:#2563eb;">
-                    </select>
-            </div>
-            <div class="period-info" id="periodDisplay">
-                (Kỳ: 21/xx - 20/xx)
-            </div>
-        </div>
-
-        <div style="display:flex; justify-content: space-between; margin-bottom: 15px; border-bottom: 2px solid #f3f4f6; padding-bottom: 15px;">
-            <div>
-                <small>Tổng Giờ</small><br>
-                <strong id="totalHoursMonth">0h</strong>
-            </div>
-            <div>
-                <small>Tổng OT</small><br>
-                <strong id="totalOTMonth" style="color: #d97706;">0h</strong>
-            </div>
-            <div style="text-align: right;">
-                <small>TỔNG LĨNH</small><br>
-                <strong id="totalMoneyMonth" style="color: #dc2626; font-size: 1.4rem;">¥0</strong>
-            </div>
-        </div>
-
-        <table id="historyTable">
-            <thead>
-                <tr>
-                    <th>Ngày</th>
-                    <th>Giờ làm</th>
-                    <th>Tiền</th>
-                    <th>Xóa</th>
-                </tr>
-            </thead>
-            <tbody>
-                </tbody>
-        </table>
-        
-        <button class="btn-delete" onclick="clearAllData()">Xóa TẤT CẢ dữ liệu lịch sử</button>
-    </div>
-</div>
-
-<script>
-    // === CẤU HÌNH ===
-    const BASE_RATE = 1225; // Lương cơ bản
-    const OT_RATE = 1.25;   // Hệ số OT
-    
-    // Khởi tạo ngày hôm nay cho ô nhập liệu
-    document.getElementById('workDate').valueAsDate = new Date();
-
-    // Load dữ liệu cũ
-    let workHistory = JSON.parse(localStorage.getItem('salaryApp_v2_history')) || [];
-    
-    // Khởi tạo Select box chọn tháng
-    initMonthSelector();
-    
-    // Render lần đầu
-    renderHistory();
-
-    // === CÁC HÀM TÍNH TOÁN ===
-
-    function calculatePreview() {
-        const startVal = document.getElementById('startTime').value;
-        const endVal = document.getElementById('endTime').value;
-        const breakVal = parseInt(document.getElementById('breakTime').value) || 0;
-
-        if (!startVal || !endVal) return;
-
-        const result = calculateSalary(startVal, endVal, breakVal);
-
-        document.getElementById('previewNetWork').innerText = formatMinutes(result.netWorkMinutes);
-        document.getElementById('previewOT').innerText = formatMinutes(result.otMinutes);
-        document.getElementById('previewSalary').innerText = formatCurrency(result.totalSalary);
-    }
-
-    function calculateSalary(start, end, breakMins) {
-        let startTime = new Date(`2000-01-01T${start}`);
-        let endTime = new Date(`2000-01-01T${end}`);
-        
-        // Xử lý làm qua đêm
-        if (endTime < startTime) {
-            endTime.setDate(endTime.getDate() + 1);
-        }
-
-        let diffMs = endTime - startTime;
-        let totalSpanMinutes = Math.floor(diffMs / 60000); 
-        
-        // Giờ làm thực = Tổng thời gian ở cty - Giờ nghỉ
-        let netWorkMinutes = totalSpanMinutes - breakMins;
-        if (netWorkMinutes < 0) netWorkMinutes = 0;
-
-        // Tách OT: Sau 8 tiếng (480 phút) tính OT
-        let normalMinutes = 0;
-        let otMinutes = 0;
-
-        if (netWorkMinutes > 480) {
-            normalMinutes = 480; 
-            otMinutes = netWorkMinutes - 480; 
-        } else {
-            normalMinutes = netWorkMinutes;
-            otMinutes = 0;
-        }
-
-        // Tính tiền
-        let payNormal = (normalMinutes / 60) * BASE_RATE;
-        let payOT = (otMinutes / 60) * BASE_RATE * OT_RATE;
-        let totalSalary = Math.round(payNormal + payOT);
-
-        return { netWorkMinutes, otMinutes, totalSalary };
-    }
-
-    function saveWorkDay() {
-        const date = document.getElementById('workDate').value;
-        const start = document.getElementById('startTime').value;
-        const end = document.getElementById('endTime').value;
-        const breakMins = parseInt(document.getElementById('breakTime').value) || 0;
-
-        if (!date || !start || !end) {
-            alert("Vui lòng nhập đủ thông tin!");
-            return;
-        }
-
-        const calc = calculateSalary(start, end, breakMins);
-
-        const entry = {
-            id: Date.now(),
-            date: date,
-            start: start,
-            end: end,
-            breakMins: breakMins,
-            netWorkMinutes: calc.netWorkMinutes,
-            otMinutes: calc.otMinutes,
-            salary: calc.totalSalary
-        };
-
-        workHistory.push(entry);
-        workHistory.sort((a, b) => new Date(b.date) - new Date(a.date)); // Sắp xếp giảm dần
-        
-        saveData();
-        renderHistory(); // Render lại để cập nhật bảng nếu đang ở tháng chứa ngày vừa nhập
-        
-        // Reset thời gian làm để nhập ngày tiếp theo nhanh hơn, giữ nguyên ngày
-        // document.getElementById('startTime').value = '';
-        // document.getElementById('endTime').value = '';
-        alert("Đã lưu thành công!");
-    }
-
-    // === XỬ LÝ KỲ LƯƠNG (QUAN TRỌNG) ===
-
-    function initMonthSelector() {
-        const select = document.getElementById('monthSelector');
-        select.innerHTML = '';
-        
-        const today = new Date();
-        const currentMonth = today.getMonth() + 1; // 1-12
-        const currentYear = today.getFullYear();
-        const currentDay = today.getDate();
-
-        // Xác định kỳ lương hiện tại
-        // Nếu hôm nay <= 20, thì đang ở kỳ lương tháng này.
-        // Nếu hôm nay >= 21, thì đang ở kỳ lương tháng sau.
-        let targetMonth = currentDay <= 20 ? currentMonth : currentMonth + 1;
-        let targetYear = currentYear;
-        
-        if (targetMonth > 12) {
-            targetMonth = 1;
-            targetYear++;
-        }
-
-        // Tạo option cho 12 tháng gần nhất (6 tháng trước, 6 tháng sau) để tiện chọn
-        for (let i = -6; i <= 6; i++) {
-            let m = targetMonth + i;
-            let y = targetYear;
-            
-            // Điều chỉnh năm
-            while (m > 12) { m -= 12; y++; }
-            while (m < 1) { m += 12; y--; }
-
-            const option = document.createElement('option');
-            option.value = `${y}-${m.toString().padStart(2, '0')}`; // Format YYYY-MM
-            option.text = `Tháng ${m}/${y}`;
-            if (i === 0) option.selected = true;
-            select.appendChild(option);
-        }
-    }
-
-    function getPayPeriod(yearMonthString) {
-        // Input: "2025-11" (Tháng 11 năm 2025)
-        // Kỳ lương: 21/10/2025 -> 20/11/2025
-        const [y, m] = yearMonthString.split('-').map(Number);
-        
-        // Ngày kết thúc: 20 của tháng được chọn
-        const endDate = new Date(y, m - 1, 20); 
-        
-        // Ngày bắt đầu: 21 của tháng trước đó
-        const startDate = new Date(y, m - 2, 21);
-
-        return { startDate, endDate };
-    }
-
-    function renderHistory() {
-        // 1. Lấy kỳ lương đang chọn
-        const selectedValue = document.getElementById('monthSelector').value;
-        const { startDate, endDate } = getPayPeriod(selectedValue);
-
-        // Hiển thị text kỳ lương
-        document.getElementById('periodDisplay').innerText = 
-            `(Kỳ tính: ${formatDateSimple(startDate)} - ${formatDateSimple(endDate)})`;
-
-        // 2. Lọc dữ liệu
-        const tbody = document.querySelector('#historyTable tbody');
-        tbody.innerHTML = '';
-
-        let totalMoney = 0;
-        let totalMinutes = 0;
-        let totalOT = 0;
-
-        // Duyệt qua lịch sử, chỉ lấy ngày nằm trong khoảng start -> end
-        const filteredList = workHistory.filter(item => {
-            const itemDate = new Date(item.date);
-            // So sánh ngày: dùng setHours(0,0,0,0) để so sánh chính xác ngày
-            const d = new Date(itemDate).setHours(0,0,0,0);
-            const s = new Date(startDate).setHours(0,0,0,0);
-            const e = new Date(endDate).setHours(0,0,0,0);
-            return d >= s && d <= e;
-        });
-
-        // 3. Render bảng
-        if (filteredList.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Chưa có dữ liệu trong kỳ này</td></tr>';
-        }
-
-        filteredList.forEach(item => {
-            totalMoney += item.salary;
-            totalMinutes += item.netWorkMinutes;
-            totalOT += item.otMinutes;
-
-            const tr = document.createElement('tr');
-            tr.innerHTML = `
-                <td>
-                    <strong>${formatDate(item.date)}</strong><br>
-                    <small style="color:#666">${item.start}-${item.end}</small>
-                </td>
-                <td>
-                    ${formatMinutes(item.netWorkMinutes)}<br>
-                    ${item.otMinutes > 0 ? `<span class="badge-ot">OT: ${formatMinutes(item.otMinutes)}</span>` : ''}
-                </td>
-                <td style="font-weight:bold; color:#2563eb;">
-                    ${formatCurrency(item.salary)}
-                </td>
-                <td>
-                    <button onclick="deleteEntry(${item.id})" style="background:none; border:none; color:#ef4444; font-weight:bold; padding:5px; margin:0; cursor:pointer;">Xóa</button>
-                </td>
-            `;
-            tbody.appendChild(tr);
-        });
-
-        // 4. Cập nhật tổng
-        document.getElementById('totalMoneyMonth').innerText = formatCurrency(totalMoney);
-        document.getElementById('totalHoursMonth').innerText = formatMinutes(totalMinutes);
-        document.getElementById('totalOTMonth').innerText = formatMinutes(totalOT);
-    }
-
-    function deleteEntry(id) {
-        if(confirm("Xóa dòng này?")) {
-            workHistory = workHistory.filter(item => item.id !== id);
-            saveData();
-            renderHistory();
-        }
-    }
-
-    function clearAllData() {
-        if(confirm("CẢNH BÁO: Xóa toàn bộ lịch sử?")) {
-            workHistory = [];
-            saveData();
-            renderHistory();
-        }
-    }
-
-    function saveData() {
-        localStorage.setItem('salaryApp_v2_history', JSON.stringify(workHistory));
-    }
-
-    // Helper functions
-    function formatCurrency(num) {
-        return '¥' + num.toLocaleString('ja-JP');
-    }
-
-    function formatMinutes(mins) {
-        if (mins === 0) return '0';
-        const h = Math.floor(mins / 60);
-        const m = mins % 60;
-        return h > 0 ? `${h}h${m > 0 ? m : ''}` : `${m}p`;
-    }
-
-    function formatDate(dateString) {
-        const [y, m, d] = dateString.split('-');
-        return `${d}/${m}`;
-    }
-
-    function formatDateSimple(dateObj) {
-        return `${dateObj.getDate()}/${dateObj.getMonth() + 1}`;
-    }
-</script>
-
-</body>
-</html>
+                    
